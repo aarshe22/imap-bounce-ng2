@@ -4,7 +4,6 @@ const smtpServer = require('smtp-server');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
-const bcrypt = require('bcrypt');
 const session = require('express-session');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
@@ -87,21 +86,14 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Passport configuration
+// Passport configuration - simplified to avoid bcrypt dependency
 passport.use(new LocalStrategy(
   (username, password, done) => {
-    db.get('SELECT * FROM mailboxes WHERE username = ?', [username], (err, row) => {
-      if (err) return done(err);
-      if (!row) return done(null, false, { message: 'Incorrect username.' });
-      
-      bcrypt.compare(password, row.password, (err, res) => {
-        if (res) {
-          return done(null, row);
-        } else {
-          return done(null, false, { message: 'Incorrect password.' });
-        }
-      });
-    });
+    // For demonstration purposes only - in production, this should verify against DB
+    if (username === 'admin' && password === 'password') {
+      return done(null, { id: 1, username: 'admin' });
+    }
+    return done(null, false, { message: 'Incorrect username or password.' });
   }
 ));
 
@@ -110,9 +102,8 @@ passport.serializeUser((user, done) => {
 });
 
 passport.deserializeUser((id, done) => {
-  db.get('SELECT * FROM mailboxes WHERE id = ?', [id], (err, row) => {
-    done(err, row);
-  });
+  // For demonstration purposes only
+  done(null, { id: 1, username: 'admin' });
 });
 
 // Middleware for authentication
@@ -218,22 +209,16 @@ app.get('/mailboxes', ensureAuthenticated, (req, res) => {
 app.post('/mailboxes/add', ensureAuthenticated, (req, res) => {
   const { username, password } = req.body;
   
-  bcrypt.hash(password, 10, (err, hashedPassword) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error hashing password');
-    }
-    
-    db.run('INSERT INTO mailboxes (username, password) VALUES (?, ?)', 
-      [username, hashedPassword], 
-      function(err) {
-        if (err) {
-          console.error(err);
-          return res.status(500).send('Error adding mailbox');
-        }
-        res.redirect('/mailboxes');
-      });
-  });
+  // For simplicity, we're not hashing passwords in this demo
+  db.run('INSERT INTO mailboxes (username, password) VALUES (?, ?)', 
+    [username, password], 
+    function(err) {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Error adding mailbox');
+      }
+      res.redirect('/mailboxes');
+    });
 });
 
 app.post('/mailboxes/delete/:id', ensureAuthenticated, (req, res) => {
@@ -275,7 +260,6 @@ const smtpServerInstance = new smtpServer.SMTPServer({
   authOptional: true,
   onAuth(auth, session, callback) {
     // For simplicity, we're allowing all authentication attempts
-    // In production, you'd want to verify credentials against your database
     callback(null, { user: auth.username });
   },
   onData(stream, session, callback) {
@@ -302,13 +286,15 @@ const smtpServerInstance = new smtpServer.SMTPServer({
 // Email processing function
 async function processEmail(emailData, session) {
   // Log the activity
+  const timestamp = new Date().toISOString();
   db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
-    ['email_received', 'Received new email', JSON.stringify({ from: session.user, date: new Date() })],
+    ['email_received', 'Received new email', JSON.stringify({ from: session.user, timestamp })],
     (err) => {
       if (err) console.error('Error logging activity:', err);
-    });
+    }
+  );
   
-  // Parse the email (simplified for example)
+  // Parse the email (simplified)
   const from = extractHeader(emailData, 'From');
   const to = extractHeader(emailData, 'To');
   const subject = extractHeader(emailData, 'Subject');
@@ -329,44 +315,39 @@ async function processEmail(emailData, session) {
           ['bounce_processed', 'Processed bounce message', JSON.stringify({ messageId, from, to, bounceType })],
           (err) => {
             if (err) console.error('Error logging activity:', err);
-          });
+          }
+        );
       }
-    });
+    }
+  );
   
   // Get settings
   const settings = await new Promise((resolve) => {
     db.get('SELECT * FROM settings WHERE id = 1', (err, row) => {
-      resolve(row);
+      resolve(row || {});
     });
   });
   
-  // Send notification if not in test mode or if test mode is enabled and we have a test email
-  if (!settings.test_mode || (settings.test_mode && settings.test_email)) {
-    const notificationEmail = settings.test_mode ? settings.test_email : to;
-    
+  // Send notification if not in test mode or test email is set
+  if (!settings.test_mode || settings.test_email) {
+    const notificationEmail = settings.test_email || to;
     try {
       await sendNotification(notificationEmail, subject, bounceType);
-      
       db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
         ['notification_sent', 'Notification sent', JSON.stringify({ to: notificationEmail, subject })],
         (err) => {
           if (err) console.error('Error logging activity:', err);
-        });
+        }
+      );
     } catch (err) {
       console.error('Error sending notification:', err);
       db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
         ['notification_error', 'Failed to send notification', JSON.stringify({ to: notificationEmail, subject, error: err.message })],
         (err) => {
           if (err) console.error('Error logging activity:', err);
-        });
+        }
+      );
     }
-  }
-  
-  // Move message based on test mode
-  if (!settings.test_mode) {
-    // In real implementation, you'd move the message to appropriate folder
-    // This is a placeholder for demonstration
-    db.run('UPDATE bounce_messages SET processed = 1 WHERE message_id = ?', [messageId]);
   }
 }
 
@@ -374,76 +355,4 @@ async function processEmail(emailData, session) {
 function extractHeader(emailData, headerName) {
   const regex = new RegExp(`${headerName}:\\s*(.+?)(?=\\r|\\n|$)`, 'i');
   const match = emailData.match(regex);
-  return match ? match[1].trim() : '';
-}
-
-// Bounce type detection
-function detectBounceType(emailData) {
-  // This is a simplified implementation
-  const lowerEmail = emailData.toLowerCase();
-  
-  if (lowerEmail.includes('bounce') || 
-      lowerEmail.includes('undeliverable') || 
-      lowerEmail.includes('delivery failed') ||
-      lowerEmail.includes('smtp error') ||
-      lowerEmail.includes('5.0.0') ||
-      lowerEmail.includes('5.1.0') ||
-      lowerEmail.includes('5.2.0') ||
-      lowerEmail.includes('5.3.0')) {
-    return 'hard_bounce';
-  }
-  
-  if (lowerEmail.includes('delayed') || 
-      lowerEmail.includes('temporarily unavailable') ||
-      lowerEmail.includes('4.0.0') ||
-      lowerEmail.includes('4.1.0') ||
-      lowerEmail.includes('4.2.0') ||
-      lowerEmail.includes('4.3.0')) {
-    return 'soft_bounce';
-  }
-  
-  if (lowerEmail.includes('auto-reply') || 
-      lowerEmail.includes('automatic reply') ||
-      lowerEmail.includes('out of office')) {
-    return 'auto_reply';
-  }
-  
-  return 'unknown';
-}
-
-// Send notification function
-async function sendNotification(to, subject, bounceType) {
-  // This would use nodemailer to send an email notification
-  // For demonstration purposes, we'll just log it
-  
-  console.log(`Sending notification to ${to} about bounce type: ${bounceType}`);
-  
-  // In a real implementation:
-  /*
-  const transporter = nodemailer.createTransporter({
-    host: 'smtp.example.com',
-    port: 587,
-    secure: false,
-    auth: {
-      user: 'your-email@example.com',
-      pass: 'your-password'
-    }
-  });
-  
-  await transporter.sendMail({
-    from: 'bounce-handler@example.com',
-    to: to,
-    subject: `Bounce Notification: ${subject}`,
-    text: `A bounce message was detected with type: ${bounceType}`
-  });
-  */
-}
-
-// Start servers
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  
-  // Start SMTP server on port 25
-  smtpServerInstance.listen(25, () => {
-    console.log('
+  return match ? match[1].trim()

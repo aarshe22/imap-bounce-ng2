@@ -102,6 +102,18 @@ If you encounter bcrypt compilation errors on Windows:
 1. Try installing Windows Build Tools: `npm install --global windows-build-tools`
 2. Or use a different Node.js version (16+ recommended)
 3. Consider using WSL (Windows Subsystem for Linux) for better compatibility
+4. You can also skip bcrypt installation by using the --no-optional flag
+
+### Starting the Application
+
+After setup, run:
+```bash
+npm start
+```
+
+The application will start on port 3000 with:
+- SMTP server listening on port 25
+- Web interface available at http://localhost:3000
 
 ## License
 
