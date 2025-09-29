@@ -1,7 +1,6 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const smtpServer = require('smtp-server');
-const imapSimple = require('imap-simple');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
@@ -10,7 +9,6 @@ const session = require('express-session');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const bodyParser = require('body-parser');
-const { createTransport } = require('nodemailer');
 
 // Create directories if they don't exist
 const dataDir = path.join(__dirname, 'data');
@@ -442,4 +440,8 @@ async function sendNotification(to, subject, bounceType) {
 }
 
 // Start servers
-const PORT
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Start SMTP server on port 25
