@@ -445,3 +445,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   
   // Start SMTP server on port 25
+  smtpServerInstance.listen(25, () => {
+    console.log('

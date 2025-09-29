@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "install-deps": "npm install express nodemailer smtp-server imap-simple sqlite3 bcrypt express-session passport passport-local",
+    "install-deps": "npm install express nodemailer smtp-server sqlite3 bcrypt express-session passport passport-local",
     "setup": "bash setup.sh",
     "dev": "nodemon src/server.js"
   },
@@ -13,7 +13,6 @@
     "express": "^4.18.2",
     "nodemailer": "^6.9.4",
     "smtp-server": "^3.13.0",
-    "imap-simple": "^5.0.0",
     "sqlite3": "^5.1.6",
     "bcrypt": "^5.1.0",
     "express-session": "^1.17.3",
