@@ -16,18 +16,36 @@ if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 npm install express nodemailer smtp-server sqlite3 express-session passport passport-local connect-flash
 
-# Verify installation
-if ($LASTEXITCODE -eq 0) {
-    Write-Host "Setup completed successfully!" -ForegroundColor Green
-    Write-Host "Directories created: data, public, views, src" -ForegroundColor Green
-    Write-Host "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local, connect-flash" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "To start the application:" -ForegroundColor Cyan
-    Write-Host "  npm start" -ForegroundColor White
-    Write-Host ""
-    Write-Host "For development with auto-restart:" -ForegroundColor Cyan
-    Write-Host "  npm run dev" -ForegroundColor White
-} else {
-    Write-Host "Error: Failed to install dependencies" -ForegroundColor Red
-    exit 1
-}
+# Create basic template files if they don't exist
+if (!(Test-Path "views/login.ejs")) {
+    mkdir -Force views
+    
+    $loginTemplate = @"
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <% if (message) { %>
+        <div style="color: red;"><%= message %></div>
+    <% } %>
+    <form method="post" action="/login">
+        <p>
+            <label>Username:</label><br>
+            <input type="text" name="username" required>
+        </p>
+        <p>
+            <label>Password:</label><br>
+            <input type="password" name="password" required>
+        </p>
+        <p>
+            <button type="submit">Login</button>
+        </p>
+    </form>
+</body>
+</html>
+"@
+    
+    $loginTemplate | Out-File -FilePath "

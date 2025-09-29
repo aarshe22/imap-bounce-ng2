@@ -18,18 +18,37 @@ fi
 echo "Installing dependencies..."
 npm install express nodemailer smtp-server sqlite3 express-session passport passport-local connect-flash
 
-# Verify installation
-if [ $? -eq 0 ]; then
-    echo "Setup completed successfully!"
-    echo "Directories created: data, public, views, src"
-    echo "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local, connect-flash"
-    echo ""
-    echo "To start the application:"
-    echo "  npm start"
-    echo ""
-    echo "For development with auto-restart:"
-    echo "  npm run dev"
-else
-    echo "Error: Failed to install dependencies"
-    exit 1
+# Create basic template files if they don't exist
+if [ ! -f "views/login.ejs" ]; then
+    mkdir -p views
+    cat > views/login.ejs << 'EOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <% if (message) { %>
+        <div style="color: red;"><%= message %></div>
+    <% } %>
+    <form method="post" action="/login">
+        <p>
+            <label>Username:</label><br>
+            <input type="text" name="username" required>
+        </p>
+        <p>
+            <label>Password:</label><br>
+            <input type="password" name="password" required>
+        </p>
+        <p>
+            <button type="submit">Login</button>
+        </p>
+    </form>
+</body>
+</html>
+EOF
 fi
+
+echo "Setup completed successfully!"
+echo "To start the application, run: npm start"

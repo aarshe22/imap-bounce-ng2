@@ -82,17 +82,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Session configuration
+// Session configuration - IMPORTANT: This must come BEFORE passport middleware
 app.use(session({
   secret: 'bounce_handler_secret_key',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: { secure: false } // Set to true if using HTTPS
 }));
 
-// Flash messages middleware
+// Flash messages middleware - MUST come AFTER session middleware
 app.use(flash());
 
-// Passport initialization
+// Passport initialization - MUST come AFTER session middleware
 app.use(passport.initialize());
 app.use(passport.session());
 
