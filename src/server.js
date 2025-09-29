@@ -355,4 +355,47 @@ async function processEmail(emailData, session) {
 function extractHeader(emailData, headerName) {
   const regex = new RegExp(`${headerName}:\\s*(.+?)(?=\\r|\\n|$)`, 'i');
   const match = emailData.match(regex);
-  return match ? match[1].trim()
+  return match ? match[1].trim() : '';
+}
+
+// Bounce type detection
+function detectBounceType(emailData) {
+  const lowerEmail = emailData.toLowerCase();
+  
+  if (lowerEmail.includes('bounce') || lowerEmail.includes('undeliverable')) {
+    return 'hard';
+  } else if (lowerEmail.includes('delayed') || lowerEmail.includes('delivery delay')) {
+    return 'soft';
+  } else if (lowerEmail.includes('auto-submitted') || lowerEmail.includes('automatic reply')) {
+    return 'auto_reply';
+  } else if (lowerEmail.includes('smtp') && (lowerEmail.includes('550') || lowerEmail.includes('552') || lowerEmail.includes('553'))) {
+    return 'hard';
+  } else if (lowerEmail.includes('smtp') && (lowerEmail.includes('450') || lowerEmail.includes('451') || lowerEmail.includes('452'))) {
+    return 'soft';
+  }
+  
+  return 'unknown';
+}
+
+// Send notification function
+async function sendNotification(to, subject, bounceType) {
+  // This is a placeholder - in a real implementation, this would send actual emails
+  console.log(`Sending notification to ${to} about ${bounceType} bounce: ${subject}`);
+  // In production, you'd use nodemailer here:
+  // const transporter = nodemailer.createTransporter({/* your config */});
+  // await transporter.sendMail({...});
+}
+
+// Start servers
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  
+  // Start SMTP server on port 25
+  smtpServerInstance.listen(25, () => {
+    console.log('SMTP server listening on port 25');
+  });
+});
+
+// Export for testing or other uses
+module.exports = app;
