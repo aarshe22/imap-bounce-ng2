@@ -1,7 +1,7 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const smtpServer = require('smtp-server');
-const imapServer = require('imap-server');
+const imapSimple = require('imap-simple');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
@@ -301,25 +301,6 @@ const smtpServerInstance = new smtpServer.SMTPServer({
   }
 });
 
-// IMAP Server
-const imapServerInstance = new imapServer.IMAPServer({
-  secure: true,
-  onConnect(session, callback) {
-    // Implement authentication logic here
-    callback(null, { user: 'authenticated_user' });
-  },
-  onList(folder, session, callback) {
-    // List folders for the client
-    const folders = [
-      { name: 'INBOX', type: 'inbox' },
-      { name: 'PROCESSED', type: 'processed' },
-      { name: 'SKIPPED', type: 'skipped' },
-      { name: 'PROBLEM', type: 'problem' }
-    ];
-    callback(null, folders);
-  }
-});
-
 // Email processing function
 async function processEmail(emailData, session) {
   // Log the activity
@@ -461,25 +442,4 @@ async function sendNotification(to, subject, bounceType) {
 }
 
 // Start servers
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  
-  // Start SMTP server on port 25
-  smtpServerInstance.listen(25, () => {
-    console.log('SMTP server listening on port 25');
-  });
-  
-  // Start IMAP server on port 993
-  imapServerInstance.listen(993, () => {
-    console.log('IMAP server listening on port 993');
-  });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).send('Something broke!');
-});
-
-module.exports = app;
+const PORT
