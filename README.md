@@ -21,8 +21,18 @@ A complete Node.js email bounce handler that functions as both an SMTP server (l
 
 ### Automatic Setup
 
-Run the setup script to create directories and install dependencies:
+**For Linux/macOS:**
+```bash
+chmod +x setup.sh
+./setup.sh
+```
 
+**For Windows:**
+```powershell
+.\setup.ps1
+```
+
+Or use the npm script:
 ```bash
 npm run setup
 ```
@@ -31,7 +41,7 @@ npm run setup
 
 1. Create required directories:
    ```bash
-   mkdir -p data public views
+   mkdir -p data public views src
    ```
 
 2. Install dependencies:
@@ -71,6 +81,8 @@ The web interface is accessible at `http://localhost:3000` and provides:
 ├── src/                  # Source code
 │   └── server.js         # Main application
 ├── views/                # EJS templates for web interface
+├── setup.sh              # Linux/macOS setup script
+├── setup.ps1             # Windows setup script
 ├── package.json          # Dependencies and scripts
 └── README.md             # This file
 ```
@@ -78,10 +90,18 @@ The web interface is accessible at `http://localhost:3000` and provides:
 ## Security
 
 - User authentication against local mailbox database
-- Passwords are securely hashed using bcrypt
 - Proper error handling to prevent information leakage
 - Secure storage of credentials in database
 - Support for SSL/TLS connections
+
+## Troubleshooting
+
+### Windows Installation Issues
+
+If you encounter bcrypt compilation errors on Windows:
+1. Try installing Windows Build Tools: `npm install --global windows-build-tools`
+2. Or use a different Node.js version (16+ recommended)
+3. Consider using WSL (Windows Subsystem for Linux) for better compatibility
 
 ## License
 

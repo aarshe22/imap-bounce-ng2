@@ -1,3 +1,6 @@
+ Also add a check for Node.js installation, and also add the missing `bcrypt` package to the list of installed packages.
+
+The final result should be:
 # Email Bounce Handler Setup Script
 # This script creates required directories and installs dependencies
 
@@ -5,6 +8,12 @@ Write-Host "Setting up Email Bounce Handler..." -ForegroundColor Green
 
 # Create required directories
 mkdir -Force data, public, views, src
+
+# Check if Node.js is available
+if (!(Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host "Error: Node.js is not installed. Please install Node.js first." -ForegroundColor Red
+    exit 1
+}
 
 # Check if npm is available
 if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
