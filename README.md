@@ -79,7 +79,12 @@ The web interface is accessible at `http://localhost:3000` and provides:
 ├── data/                 # Database storage
 ├── public/               # Static assets (CSS, JS, images)
 ├── src/                  # Source code
-│   └── server.js         # Main application
+│   ├── server.js         # Main application entry point
+│   ├── database.js       # Database initialization and operations
+│   ├── smtp-handler.js   # SMTP server handling
+│   ├── routes.js         # HTTP routes
+│   ├── auth.js           # Authentication logic
+│   └── email-processor.js# Email processing functions
 ├── views/                # EJS templates for web interface
 ├── setup.sh              # Linux/macOS setup script
 ├── setup.ps1             # Windows setup script

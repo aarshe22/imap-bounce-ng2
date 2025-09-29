@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "install-deps": "npm install express nodemailer smtp-server sqlite3 express-session passport passport-local",
+    "install-deps": "npm install express nodemailer smtp-server sqlite3 express-session passport passport-local connect-flash",
     "setup": "bash setup.sh",
     "dev": "nodemon src/server.js"
   },
@@ -16,7 +16,8 @@
     "sqlite3": "^5.1.6",
     "express-session": "^1.17.3",
     "passport": "^0.6.0",
-    "passport-local": "^1.0.0"
+    "passport-local": "^1.0.0",
+    "connect-flash": "^0.1.1"
   },
   "keywords": [
     "email",

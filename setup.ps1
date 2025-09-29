@@ -14,13 +14,13 @@ if (!(Get-Command npm -ErrorAction SilentlyContinue)) {
 
 # Install dependencies
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-npm install express nodemailer smtp-server sqlite3 express-session passport passport-local
+npm install express nodemailer smtp-server sqlite3 express-session passport passport-local connect-flash
 
 # Verify installation
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Setup completed successfully!" -ForegroundColor Green
     Write-Host "Directories created: data, public, views, src" -ForegroundColor Green
-    Write-Host "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local" -ForegroundColor Green
+    Write-Host "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local, connect-flash" -ForegroundColor Green
     Write-Host ""
     Write-Host "To start the application:" -ForegroundColor Cyan
     Write-Host "  npm start" -ForegroundColor White
@@ -31,4 +31,3 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "Error: Failed to install dependencies" -ForegroundColor Red
     exit 1
 }
-

@@ -1,13 +1,70 @@
+```javascript src/server.js
 const express = require('express');
-const nodemailer = require('nodemailer');
-const smtpServer = require('smtp-server');
+const path = require('path');
+const fs = require('fs');
+const bodyParser = require('body-parser');
+const session = require('express-session');
+const passport = require('passport');
+const flash = require('connect-flash');
+
+// Initialize database
+const db = require('./database.js');
+
+// Import components
+const initializeRoutes = require('./routes.js');
+const initializeAuth = require('./auth.js');
+const initializeSMTP = require('./smtp-handler.js');
+
+// Create directories if they don't exist
+const dataDir = path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir, { recursive: true });
+}
+
+// Initialize Express app
+const app = express();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Session configuration
+app.use(session({
+  secret: 'bounce_handler_secret_key',
+  resave: false,
+  saveUninitialized: false
+}));
+
+// Flash messages middleware
+app.use(flash());
+
+// Passport initialization
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Initialize authentication
+initializeAuth(passport);
+
+// Initialize routes
+initializeRoutes(app, passport);
+
+// Initialize SMTP server
+initializeSMTP();
+
+// Start the main application
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = app;
+```
+
+```javascript src/database.js
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
-const session = require('express-session');
-const passport = require('passport');
-const LocalStrategy = require('passport-local').Strategy;
-const bodyParser = require('body-parser');
 
 // Create directories if they don't exist
 const dataDir = path.join(__dirname, 'data');
@@ -73,329 +130,239 @@ db.serialize(() => {
   });
 });
 
-// Initialize Express app
-const app = express();
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
-  secret: 'bounce_handler_secret_key',
-  resave: false,
-  saveUninitialized: false
-}));
-app.use(passport.initialize());
-app.use(passport.session());
+module.exports = db;
+```
 
-// Passport configuration - simplified to avoid bcrypt dependency
-passport.use(new LocalStrategy(
-  (username, password, done) => {
-    // For demonstration purposes only - in production, this should verify against DB
-    if (username === 'admin' && password === 'password') {
-      return done(null, { id: 1, username: 'admin' });
+```javascript src/auth.js
+const LocalStrategy = require('passport-local').Strategy;
+const db = require('./database.js');
+
+function initialize(passport) {
+  passport.use(new LocalStrategy(
+    (username, password, done) => {
+      // For demonstration purposes only - in production, this should verify against DB
+      if (username === 'admin' && password === 'password') {
+        return done(null, { id: 1, username: 'admin' });
+      }
+      return done(null, false, { message: 'Incorrect username or password.' });
     }
-    return done(null, false, { message: 'Incorrect username or password.' });
-  }
-));
+  ));
 
-passport.serializeUser((user, done) => {
-  done(null, user.id);
-});
-
-passport.deserializeUser((id, done) => {
-  // For demonstration purposes only
-  done(null, { id: 1, username: 'admin' });
-});
-
-// Middleware for authentication
-const ensureAuthenticated = (req, res, next) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.redirect('/login');
-};
-
-// Routes
-app.get('/', ensureAuthenticated, (req, res) => {
-  res.redirect('/dashboard');
-});
-
-app.get('/login', (req, res) => {
-  res.render('login.ejs', { message: req.flash('error') });
-});
-
-app.post('/login', passport.authenticate('local', {
-  successRedirect: '/dashboard',
-  failureRedirect: '/login'
-}));
-
-app.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) return next(err);
-    res.redirect('/login');
+  passport.serializeUser((user, done) => {
+    done(null, user.id);
   });
-});
 
-// Dashboard
-app.get('/dashboard', ensureAuthenticated, (req, res) => {
-  db.all('SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT 10', (err, logs) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error loading activity log');
+  passport.deserializeUser((id, done) => {
+    // For demonstration purposes only
+    done(null, { id: 1, username: 'admin' });
+  });
+}
+
+module.exports = initialize;
+```
+
+```javascript src/routes.js
+const db = require('./database.js');
+
+function initializeRoutes(app, passport) {
+  // Middleware for authentication
+  const ensureAuthenticated = (req, res, next) => {
+    if (req.isAuthenticated()) {
+      return next();
     }
-    
+    req.flash('error', 'Please log in to access this page');
+    res.redirect('/login');
+  };
+
+  // Routes
+  app.get('/', ensureAuthenticated, (req, res) => {
+    res.redirect('/dashboard');
+  });
+
+  app.get('/login', (req, res) => {
+    res.render('login.ejs', { message: req.flash('error') });
+  });
+
+  app.post('/login', passport.authenticate('local', {
+    successRedirect: '/dashboard',
+    failureRedirect: '/login',
+    failureFlash: true
+  }));
+
+  app.get('/logout', (req, res) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.redirect('/login');
+    });
+  });
+
+  // Dashboard
+  app.get('/dashboard', ensureAuthenticated, (req, res) => {
+    db.all('SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT 10', (err, logs) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Error loading activity log');
+      }
+      
+      db.get('SELECT * FROM settings WHERE id = 1', (err, settings) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).send('Error loading settings');
+        }
+        
+        res.render('dashboard.ejs', { logs, settings });
+      });
+    });
+  });
+
+  // Configuration
+  app.get('/configuration', ensureAuthenticated, (req, res) => {
     db.get('SELECT * FROM settings WHERE id = 1', (err, settings) => {
       if (err) {
         console.error(err);
         return res.status(500).send('Error loading settings');
       }
-      
-      res.render('dashboard.ejs', { logs, settings });
+      res.render('configuration.ejs', { settings });
     });
   });
-});
 
-// Configuration
-app.get('/configuration', ensureAuthenticated, (req, res) => {
-  db.get('SELECT * FROM settings WHERE id = 1', (err, settings) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error loading settings');
-    }
-    res.render('configuration.ejs', { settings });
+  app.post('/configuration', ensureAuthenticated, (req, res) => {
+    const {
+      test_mode,
+      test_email,
+      imap_host,
+      imap_port,
+      imap_secure,
+      imap_username,
+      imap_password
+    } = req.body;
+    
+    db.run(`UPDATE settings SET 
+      test_mode = ?, 
+      test_email = ?, 
+      imap_host = ?, 
+      imap_port = ?, 
+      imap_secure = ?, 
+      imap_username = ?, 
+      imap_password = ?
+      WHERE id = 1`,
+      [test_mode, test_email, imap_host, imap_port, imap_secure, imap_username, imap_password],
+      (err) => {
+        if (err) {
+          console.error(err);
+          return res.status(500).send('Error updating settings');
+        }
+        req.flash('success', 'Settings updated successfully');
+        res.redirect('/configuration');
+      });
   });
-});
 
-app.post('/configuration', ensureAuthenticated, (req, res) => {
-  const {
-    test_mode,
-    test_email,
-    imap_host,
-    imap_port,
-    imap_secure,
-    imap_username,
-    imap_password
-  } = req.body;
-  
-  db.run(`UPDATE settings SET 
-    test_mode = ?, 
-    test_email = ?, 
-    imap_host = ?, 
-    imap_port = ?, 
-    imap_secure = ?, 
-    imap_username = ?, 
-    imap_password = ?
-    WHERE id = 1`,
-    [test_mode, test_email, imap_host, imap_port, imap_secure, imap_username, imap_password],
-    (err) => {
+  // Mailboxes
+  app.get('/mailboxes', ensureAuthenticated, (req, res) => {
+    db.all('SELECT * FROM mailboxes ORDER BY created_at DESC', (err, mailboxes) => {
       if (err) {
         console.error(err);
-        return res.status(500).send('Error updating settings');
+        return res.status(500).send('Error loading mailboxes');
       }
-      res.redirect('/configuration');
+      res.render('mailboxes.ejs', { mailboxes });
     });
-});
-
-// Mailboxes
-app.get('/mailboxes', ensureAuthenticated, (req, res) => {
-  db.all('SELECT * FROM mailboxes ORDER BY created_at DESC', (err, mailboxes) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error loading mailboxes');
-    }
-    res.render('mailboxes.ejs', { mailboxes });
   });
-});
 
-app.post('/mailboxes/add', ensureAuthenticated, (req, res) => {
-  const { username, password } = req.body;
-  
-  // For simplicity, we're not hashing passwords in this demo
-  db.run('INSERT INTO mailboxes (username, password) VALUES (?, ?)', 
-    [username, password], 
-    function(err) {
+  app.post('/mailboxes/add', ensureAuthenticated, (req, res) => {
+    const { username, password } = req.body;
+    
+    // For simplicity, we're not hashing passwords in this demo
+    db.run('INSERT INTO mailboxes (username, password) VALUES (?, ?)', 
+      [username, password], 
+      function(err) {
+        if (err) {
+          console.error(err);
+          return res.status(500).send('Error adding mailbox');
+        }
+        req.flash('success', 'Mailbox added successfully');
+        res.redirect('/mailboxes');
+      });
+  });
+
+  app.post('/mailboxes/delete/:id', ensureAuthenticated, (req, res) => {
+    const { id } = req.params;
+    
+    db.run('DELETE FROM mailboxes WHERE id = ?', [id], (err) => {
       if (err) {
         console.error(err);
-        return res.status(500).send('Error adding mailbox');
+        return res.status(500).send('Error deleting mailbox');
       }
+      req.flash('success', 'Mailbox deleted successfully');
       res.redirect('/mailboxes');
     });
-});
-
-app.post('/mailboxes/delete/:id', ensureAuthenticated, (req, res) => {
-  const { id } = req.params;
-  
-  db.run('DELETE FROM mailboxes WHERE id = ?', [id], (err) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error deleting mailbox');
-    }
-    res.redirect('/mailboxes');
   });
-});
 
-// Activity log
-app.get('/activity-log', ensureAuthenticated, (req, res) => {
-  db.all('SELECT * FROM activity_log ORDER BY timestamp DESC', (err, logs) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error loading activity log');
-    }
-    res.render('activity-log.ejs', { logs });
-  });
-});
-
-// Bounce messages
-app.get('/bounce-messages', ensureAuthenticated, (req, res) => {
-  db.all('SELECT * FROM bounce_messages ORDER BY created_at DESC', (err, messages) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).send('Error loading bounce messages');
-    }
-    res.render('bounce-messages.ejs', { messages });
-  });
-});
-
-// SMTP Server
-const smtpServerInstance = new smtpServer.SMTPServer({
-  authOptional: true,
-  onAuth(auth, session, callback) {
-    // For simplicity, we're allowing all authentication attempts
-    callback(null, { user: auth.username });
-  },
-  onData(stream, session, callback) {
-    let emailData = '';
-    
-    stream.on('data', (chunk) => {
-      emailData += chunk.toString();
-    });
-    
-    stream.on('end', () => {
-      // Process the email here
-      processEmail(emailData, session)
-        .then(() => {
-          callback(null, 'Message accepted');
-        })
-        .catch((err) => {
-          console.error('Error processing email:', err);
-          callback(new Error('Failed to process email'));
-        });
-    });
-  }
-});
-
-// Email processing function
-async function processEmail(emailData, session) {
-  // Log the activity
-  const timestamp = new Date().toISOString();
-  db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
-    ['email_received', 'Received new email', JSON.stringify({ from: session.user, timestamp })],
-    (err) => {
-      if (err) console.error('Error logging activity:', err);
-    }
-  );
-  
-  // Parse the email (simplified)
-  const from = extractHeader(emailData, 'From');
-  const to = extractHeader(emailData, 'To');
-  const subject = extractHeader(emailData, 'Subject');
-  const messageId = extractHeader(emailData, 'Message-ID');
-  
-  // Detect bounce type
-  const bounceType = detectBounceType(emailData);
-  
-  // Save to database
-  db.run('INSERT INTO bounce_messages (message_id, from_address, to_address, subject, bounce_type) VALUES (?, ?, ?, ?, ?)',
-    [messageId, from, to, subject, bounceType],
-    function(err) {
+  // Activity log
+  app.get('/activity-log', ensureAuthenticated, (req, res) => {
+    db.all('SELECT * FROM activity_log ORDER BY timestamp DESC', (err, logs) => {
       if (err) {
-        console.error('Error saving bounce message:', err);
-      } else {
-        // Log successful processing
-        db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
-          ['bounce_processed', 'Processed bounce message', JSON.stringify({ messageId, from, to, bounceType })],
-          (err) => {
-            if (err) console.error('Error logging activity:', err);
-          }
-        );
+        console.error(err);
+        return res.status(500).send('Error loading activity log');
       }
-    }
-  );
-  
-  // Get settings
-  const settings = await new Promise((resolve) => {
-    db.get('SELECT * FROM settings WHERE id = 1', (err, row) => {
-      resolve(row || {});
+      res.render('activity-log.ejs', { logs });
     });
   });
-  
-  // Send notification if not in test mode or test email is set
-  if (!settings.test_mode || settings.test_email) {
-    const notificationEmail = settings.test_email || to;
-    try {
-      await sendNotification(notificationEmail, subject, bounceType);
-      db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
-        ['notification_sent', 'Notification sent', JSON.stringify({ to: notificationEmail, subject })],
-        (err) => {
-          if (err) console.error('Error logging activity:', err);
-        }
-      );
-    } catch (err) {
-      console.error('Error sending notification:', err);
-      db.run('INSERT INTO activity_log (type, message, details) VALUES (?, ?, ?)', 
-        ['notification_error', 'Failed to send notification', JSON.stringify({ to: notificationEmail, subject, error: err.message })],
-        (err) => {
-          if (err) console.error('Error logging activity:', err);
-        }
-      );
+
+  // Bounce messages
+  app.get('/bounce-messages', ensureAuthenticated, (req, res) => {
+    db.all('SELECT * FROM bounce_messages ORDER BY created_at DESC', (err, messages) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).send('Error loading bounce messages');
+      }
+      res.render('bounce-messages.ejs', { messages });
+    });
+  });
+}
+
+module.exports = initializeRoutes;
+```
+
+```javascript src/smtp-handler.js
+const smtpServer = require('smtp-server');
+const db = require('./database.js');
+const emailProcessor = require('./email-processor.js');
+
+function initializeSMTP() {
+  const server = new smtpServer.SMTPServer({
+    authOptional: true,
+    onAuth(auth, session, callback) {
+      // For simplicity, we're allowing all authentication attempts
+      callback(null, { user: auth.username });
+    },
+    onData(stream, session, callback) {
+      let emailData = '';
+      
+      stream.on('data', (chunk) => {
+        emailData += chunk.toString();
+      });
+      
+      stream.on('end', () => {
+        // Process the email here
+        emailProcessor.processEmail(emailData, session)
+          .then(() => {
+            callback(null, 'Message accepted');
+          })
+          .catch((err) => {
+            console.error('Error processing email:', err);
+            callback(new Error('Failed to process email'));
+          });
+      });
     }
-  }
-}
+  });
 
-// Helper function to extract headers
-function extractHeader(emailData, headerName) {
-  const regex = new RegExp(`${headerName}:\\s*(.+?)(?=\\r|\\n|$)`, 'i');
-  const match = emailData.match(regex);
-  return match ? match[1].trim() : '';
-}
-
-// Bounce type detection
-function detectBounceType(emailData) {
-  const lowerEmail = emailData.toLowerCase();
-  
-  if (lowerEmail.includes('bounce') || lowerEmail.includes('undeliverable')) {
-    return 'hard';
-  } else if (lowerEmail.includes('delayed') || lowerEmail.includes('delivery delay')) {
-    return 'soft';
-  } else if (lowerEmail.includes('auto-submitted') || lowerEmail.includes('automatic reply')) {
-    return 'auto_reply';
-  } else if (lowerEmail.includes('smtp') && (lowerEmail.includes('550') || lowerEmail.includes('552') || lowerEmail.includes('553'))) {
-    return 'hard';
-  } else if (lowerEmail.includes('smtp') && (lowerEmail.includes('450') || lowerEmail.includes('451') || lowerEmail.includes('452'))) {
-    return 'soft';
-  }
-  
-  return 'unknown';
-}
-
-// Send notification function
-async function sendNotification(to, subject, bounceType) {
-  // This is a placeholder - in a real implementation, this would send actual emails
-  console.log(`Sending notification to ${to} about ${bounceType} bounce: ${subject}`);
-  // In production, you'd use nodemailer here:
-  // const transporter = nodemailer.createTransporter({/* your config */});
-  // await transporter.sendMail({...});
-}
-
-// Start servers
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  
   // Start SMTP server on port 25
-  smtpServerInstance.listen(25, () => {
+  server.listen(25, () => {
     console.log('SMTP server listening on port 25');
   });
-});
 
-// Export for testing or other uses
-module.exports = app;
+  return server;
+}
+
+module.exports = initializeSMTP;
+

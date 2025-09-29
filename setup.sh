@@ -16,13 +16,13 @@ fi
 
 # Install dependencies
 echo "Installing dependencies..."
-npm install express nodemailer smtp-server sqlite3 express-session passport passport-local
+npm install express nodemailer smtp-server sqlite3 express-session passport passport-local connect-flash
 
 # Verify installation
 if [ $? -eq 0 ]; then
     echo "Setup completed successfully!"
     echo "Directories created: data, public, views, src"
-    echo "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local"
+    echo "Dependencies installed: express, nodemailer, smtp-server, sqlite3, express-session, passport, passport-local, connect-flash"
     echo ""
     echo "To start the application:"
     echo "  npm start"
